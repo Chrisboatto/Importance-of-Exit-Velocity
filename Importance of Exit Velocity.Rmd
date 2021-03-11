@@ -1,0 +1,109 @@
+---
+title: "Fangraphs Hitting"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+url1 <- 'https://raw.githubusercontent.com/Chrisboatto/Importance-of-Exit-Velocity/main/FanGraphs%20Leaderboard.csv'
+
+url2 <- "https://raw.githubusercontent.com/Chrisboatto/Importance-of-Exit-Velocity/main/savant_data_hitters.csv"
+```
+
+```{r}
+require(magrittr)
+require(dplyr)
+require(stringr)
+library(magrittr)
+library(dplyr)
+library(stringr)
+```
+
+```{r}
+fangraphsData <- read.csv(url1)
+statcastData <- read.csv(url2, header = TRUE)
+```
+
+```{r}
+str(fangraphsData)
+```
+
+```{r}
+str(statcastData)
+```
+
+```{r}
+statcastData <- read.csv(url2, encoding = "UTF-8", sep = ',')
+```
+
+```{r}
+summary(statcastData)
+```
+
+```{r}
+summary(fangraphsData)
+```
+
+```{r}
+fangraphsData$BB. <- as.numeric(sub('%', "", fangraphsData$BB.))/100
+fangraphsData$K. <- as.numeric(sub('%', "", fangraphsData$K.))/100
+statcastData[6:9] <- lapply(statcastData[6:9], as.numeric)
+statcastData[14:16] <- lapply(statcastData[14:16], as.numeric)
+statcastData$xba <- as.numeric(statcastData$xba)
+```
+
+```{r}
+sum(is.na(statcastData))
+sum(is.na(fangraphsData))
+sum(is.null(statcastData))
+sum(is.null(fangraphsData))
+```
+
+```{r}
+statcastData <- statcastData %>% filter(!is.na(babip))
+```
+
+```{r}
+sum(is.na(statcastData))
+sum(is.na(fangraphsData))
+```
+
+```{r}
+str(statcastData)
+str(fangraphsData)
+```
+
+```{r}
+summary(statcastData)
+summary(fangraphsData)
+```
+
+```{r}
+splits <- str_split_fixed(statcastData$player_name, ", ", 2)
+statcastData$player_name <- paste(splits[,2], splits[,1], sep = ' ')
+```
+
+```{r}
+unwanted_array = list('Š'='S', 'š'='s', 'Ž'='Z', 'ž'='z', 'À'='A', 'Á'='A', 'Â'='A', 'Ã'='A', 'Ä'='A', 'Å'='A', 'Æ'='A', 'Ç'='C', 'È'='E', 'É'='E','Ê'='E', 'Ë'='E', 'Ì'='I', 'Í'='I', 'Î'='I', 'Ï'='I', 'Ñ'='N', 'Ò'='O', 'Ó'='O', 'Ô'='O', 'Õ'='O', 'Ö'='O', 'Ø'='O', 'Ù'='U','Ú'='U', 'Û'='U', 'Ü'='U', 'Ý'='Y', 'Þ'='B', 'ß'='Ss', 'à'='a', 'á'='a', 'â'='a', 'ã'='a', 'ä'='a', 'å'='a', 'æ'='a', 'ç'='c','è'='e', 'é'='e', 'ê'='e', 'ë'='e', 'ì'='i', 'í'='i', 'î'='i', 'ï'='i', 'ð'='o', 'ñ'='n', 'ò'='o', 'ó'='o', 'ô'='o', 'õ'='o','ö'='o', 'ø'='o', 'ù'='u', 'ú'='u', 'û'='u', 'ý'='y', 'ý'='y', 'þ'='b', 'ÿ'='y')
+
+statcastData$player_name <- chartr(paste(names(unwanted_array), collapse = ''), paste(unwanted_array, collapse = ''), statcastData$player_name)
+```
+
+```{r}
+fangraphsData <- rename(fangraphsData, player_name = ï..Name)
+```
+
+
+```{r}
+baseballData <- full_join(fangraphsData, statcastData, by = "player_name", copy = FALSE)
+```
+
