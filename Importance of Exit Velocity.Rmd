@@ -23,9 +23,23 @@ url2 <- "https://raw.githubusercontent.com/Chrisboatto/Importance-of-Exit-Veloci
 require(magrittr)
 require(dplyr)
 require(stringr)
+require(corrplot)
+require(ggplot2)
+require(randomForest)
+require(pROC)
+require(tidyverse)
+require(caret)
+require(ROCR)
+library(ROCR)
+library(caret)
 library(magrittr)
 library(dplyr)
 library(stringr)
+library(corrplot)
+library(ggplot2)
+library(randomForest)
+library(pROC)
+library(tidyverse)
 ```
 
 ```{r}
@@ -70,6 +84,7 @@ sum(is.null(fangraphsData))
 
 ```{r}
 statcastData <- statcastData %>% filter(!is.na(babip))
+fangraphsData <- fangraphsData %>% filter(!is.na(EV))
 ```
 
 ```{r}
@@ -96,14 +111,131 @@ statcastData$player_name <- paste(splits[,2], splits[,1], sep = ' ')
 unwanted_array = list('Š'='S', 'š'='s', 'Ž'='Z', 'ž'='z', 'À'='A', 'Á'='A', 'Â'='A', 'Ã'='A', 'Ä'='A', 'Å'='A', 'Æ'='A', 'Ç'='C', 'È'='E', 'É'='E','Ê'='E', 'Ë'='E', 'Ì'='I', 'Í'='I', 'Î'='I', 'Ï'='I', 'Ñ'='N', 'Ò'='O', 'Ó'='O', 'Ô'='O', 'Õ'='O', 'Ö'='O', 'Ø'='O', 'Ù'='U','Ú'='U', 'Û'='U', 'Ü'='U', 'Ý'='Y', 'Þ'='B', 'ß'='Ss', 'à'='a', 'á'='a', 'â'='a', 'ã'='a', 'ä'='a', 'å'='a', 'æ'='a', 'ç'='c','è'='e', 'é'='e', 'ê'='e', 'ë'='e', 'ì'='i', 'í'='i', 'î'='i', 'ï'='i', 'ð'='o', 'ñ'='n', 'ò'='o', 'ó'='o', 'ô'='o', 'õ'='o','ö'='o', 'ø'='o', 'ù'='u', 'ú'='u', 'û'='u', 'ý'='y', 'ý'='y', 'þ'='b', 'ÿ'='y')
 
 statcastData$player_name <- chartr(paste(names(unwanted_array), collapse = ''), paste(unwanted_array, collapse = ''), statcastData$player_name)
+
+statcastData$player_name[73] <- "Ronald Acuna Jr."
 ```
 
 ```{r}
 fangraphsData <- rename(fangraphsData, player_name = ï..Name)
 ```
 
-
 ```{r}
 baseballData <- full_join(fangraphsData, statcastData, by = "player_name", copy = FALSE)
+```
+
+```{r}
+baseballData <- select(baseballData, -c(25:31, 39:41, 45:53))
+```
+
+```{r}
+sum(is.na(baseballData))
+```
+
+```{r}
+baseballData <- baseballData %>% filter(!is.na(pitches)) %>% filter(!is.na(WAR)) %>% filter(PA > 50)
+```
+
+```{r}
+sum(is.na(baseballData))
+```
+
+```{r}
+baseballData_cor <- cor(baseballData[3:33])
+corrplot(baseballData_cor, type = "upper", order = 'hclust', tl.col = "blue")
+```
+
+```{r}
+ggplot(baseballData, aes(x = EV, fill = EV)) +
+geom_density(alpha = 0.3, fill = "red") + 
+labs(title = "Exit Velocity Density Plot", subtitle = "MLB Players", x = "Exit Velocity", y = "Density") +
+theme(panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+```{r}
+baseballData <- relocate(baseballData, launch_angle, .before = BsR)
+
+boxplot(baseballData[17:19], col = rainbow(5), main = "Boxplot of Hitting Metrics", xlab = "Hitting Metrics", ylab = "Value")
+```
+
+```{r}
+ggplot(baseballData, aes(x = EV, y = wRC.)) +
+  geom_point(size = 1, color = "blue") +
+  geom_smooth(method = 'auto', level = 0.90, color = "darkred") +
+  labs(title = "Exit Velocity to Offense Relationship", subtitle = "2020 MLB Season", x = "Exit Velocity", y = "Offensive Output (wRC+)")
+
+```
+
+```{r}
+set.seed(798465)
+train <- sample(nrow(baseballData), 0.80*nrow(baseballData), replace = FALSE)
+trainSet <- baseballData[train,]
+testSet <- baseballData[-train,]
+```
+
+```{r}
+baseModel <- randomForest(wRC. ~ ., data = trainSet, ntree = 50)
+```
+
+```{r}
+baseImp <- importance(baseModel)
+baseImp
+```
+
+```{r}
+baseImp <- as.data.frame(baseImp)
+ggplot(baseImp, aes(IncNodePurity, row.names(baseImp))) + 
+  geom_bar(stat = "identity", width = 0.1, fill = "black") + 
+  geom_point(shape = 21, size = 3, colour = "black", fill = "green", stroke = 2) + 
+  labs(title = "Offense Importance", x = "Importance", y = "Variable")
+```
+
+```{r}
+plot(baseModel, col = "green", main = "Base Model Error Chart")
+```
+
+```{r}
+newModel <- randomForest(wRC. ~ whiffs + takes + swings + pitches + PA + EV + launch_angle + K. + G + BB. + abs, data = trainSet, ntree = 50, maxnodes = 10)
+```
+
+```{r}
+EV_train <- predict(newModel, trainSet, type = "response")
+EV_test <- predict(newModel, testSet, type = "response")
+```
+
+```{r}
+trainSet <- cbind(trainSet, EV_train)
+testSet <- cbind(testSet, EV_test)
+```
+
+```{r}
+names(trainSet)[names(trainSet) == "EV_train"] <- "wRC_pred"
+names(testSet)[names(testSet) == "EV_test"] <- "wRC_pred"
+```
+
+```{r}
+wRC_Full <- rbind(trainSet, testSet)
+```
+
+```{r}
+plot(newModel, col = "green", main = "New Model Error Chart")
+```
+
+```{r}
+newImp <- importance(newModel)
+newImp
+
+newImp <- as.data.frame(newImp)
+ggplot(newImp, aes(IncNodePurity, row.names(newImp))) + 
+  geom_bar(stat = "identity", width = 0.1, fill = "black") + 
+  geom_point(shape = 21, size = 3, colour = "black", fill = "green", stroke = 2) + 
+  labs(title = "Offense Importance", x = "Importance", y = "Variable")
+```
+
+```{r}
+wRC_Full <- wRC_Full %>% mutate(wRC_Diff = wRC_pred - wRC.) %>% select(c(player_name, wRC., wRC_pred, wRC_Diff, EV, launch_angle))
+```
+
+```{r}
+wRC_Full[order(-wRC_Full$wRC_pred),]
 ```
 
