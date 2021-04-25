@@ -236,6 +236,6 @@ wRC_Full <- wRC_Full %>% mutate(wRC_Diff = wRC_pred - wRC.) %>% select(c(player_
 ```
 
 ```{r}
-wRC_Full[order(-wRC_Full$wRC_pred),]
+wRC_Full[order(-wRC_Full$wRC_Diff),]
 ```
 
